@@ -166,10 +166,11 @@ ros2 launch stella_ahrs stella_ahrs_launch.py
 
 이 AHRS를 휠 오도메트리와 결합하여 더 정확한 위치추정이 가능합니다.
 
-```
-/odom (wheel encoder) ──┐
-                        ├──→ EKF ──→ /odometry/filtered
-/imu/data (AHRS)    ───┘
+```mermaid
+graph LR
+    ODOM["/odom<br/>(wheel encoder)"] --> EKF["ekf_filter_node"]
+    IMU["/imu/data<br/>(AHRS)"] --> EKF
+    EKF --> OUT["/odometry/filtered"]
 ```
 
 EKF 설정은 [sendbooster_agv_bringup](https://github.com/SeongminJaden/sendbooster_agv_bringup)의 `config/ekf.yaml`을 참고하세요.

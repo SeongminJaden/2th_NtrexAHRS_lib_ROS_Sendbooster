@@ -8,16 +8,16 @@ from launch.actions import DeclareLaunchArgument
 from launch.conditions import IfCondition
 from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import Node
-from launch_ros.actions import LifecycleNode
+
 
 def generate_launch_description():
-    
+
     config_dir = get_package_share_directory('stella_ahrs')
     config_file = os.path.join(config_dir, 'config', 'config.yaml')
 
     rviz_config_file = LaunchConfiguration('rviz_config_file')
     use_rviz = LaunchConfiguration('use_rviz')
-    
+
     declare_rviz_config_file_cmd = DeclareLaunchArgument(
         'rviz_config_file',
         default_value=os.path.join(config_dir, 'rviz', 'imu_test.rviz'),
@@ -36,16 +36,19 @@ def generate_launch_description():
         arguments=['-d', rviz_config_file],
         output='screen')
 
-    driver_node = LifecycleNode(package='stella_ahrs',
-                                node_executable='stella_ahrs_node',
-                                node_name='stella_ahrs_node',
-                                output='screen',
-                                emulate_tty=True,
-                                node_namespace='/',
-                                )
+    driver_node = Node(
+        package='stella_ahrs',
+        executable='stella_ahrs_node',
+        name='stella_ahrs_node',
+        namespace='/',
+        parameters=[config_file],
+        output='screen',
+        emulate_tty=True,
+    )
 
     return LaunchDescription([
-      driver_node,
+        declare_rviz_config_file_cmd,
+        declare_use_rviz_cmd,
+        driver_node,
+        rviz_cmd,
     ])
-
-

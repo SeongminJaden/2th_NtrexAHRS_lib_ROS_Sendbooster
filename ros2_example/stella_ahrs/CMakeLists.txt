@@ -1,16 +1,15 @@
 ################################################################################
 # Set minimum required version of cmake, project name and compile options
 ################################################################################
-cmake_minimum_required(VERSION 3.5)
+cmake_minimum_required(VERSION 3.16)
 project(stella_ahrs)
 
 if(NOT CMAKE_CXX_STANDARD)
-  set(CMAKE_CXX_STANDARD 14)
+  set(CMAKE_CXX_STANDARD 17)
 endif()
 
 if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
   add_compile_options(-Wall -Wextra -Wpedantic)
-  #add_compile_options(-Wall -Wextra -Wpedantic -O3 -march=native)
 endif()
 
 ################################################################################
@@ -28,46 +27,55 @@ find_package(tf2_msgs REQUIRED)
 ################################################################################
 # Build
 ################################################################################
-include_directories(
+add_executable(${PROJECT_NAME}_node
+  src/listener.cpp
+  serial/list_ports_linux.cc
+  serial/serial.cc
+  serial/unix.cc
+  mw/mw_ahrs.cpp
+)
+
+target_include_directories(${PROJECT_NAME}_node PRIVATE
   "${PROJECT_SOURCE_DIR}/include/mw"
   "${PROJECT_SOURCE_DIR}/include/serial"
 )
 
-add_executable(${PROJECT_NAME}_node src/listener.cpp serial/list_ports_linux.cc serial/serial.cc serial/unix.cc mw/mw_ahrs.cpp)
-ament_target_dependencies(stella_ahrs_node
-"rclcpp"
-"std_msgs"
-"sensor_msgs"
-"geometry_msgs"
-"tf2"
-"tf2_ros"
-"tf2_msgs"
+ament_target_dependencies(${PROJECT_NAME}_node
+  rclcpp
+  std_msgs
+  sensor_msgs
+  geometry_msgs
+  tf2
+  tf2_ros
+  tf2_msgs
 )
-
 
 target_link_libraries(${PROJECT_NAME}_node ${CMAKE_CURRENT_SOURCE_DIR}/lib/MW_AHRS_amd64.a)
 
 ################################################################################
 # Install
 ################################################################################
-
-
 install(
   DIRECTORY launch
   DESTINATION share/${PROJECT_NAME}/
 )
 
 install(
-  DIRECTORY rviz DESTINATION share/${PROJECT_NAME}
+  DIRECTORY rviz
+  DESTINATION share/${PROJECT_NAME}/
+)
+
+install(
+  DIRECTORY config
+  DESTINATION share/${PROJECT_NAME}/
 )
 
 install(TARGETS
   ${PROJECT_NAME}_node
-  DESTINATION lib/${PROJECT_NAME})
-
+  DESTINATION lib/${PROJECT_NAME}
+)
 
 ################################################################################
 # Macro for ament package
 ################################################################################
-ament_export_include_directories(include)
 ament_package()

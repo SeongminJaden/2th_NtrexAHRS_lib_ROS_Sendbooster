@@ -1,23 +1,25 @@
 #include "mw_ahrs.hpp"
 #include "mw_ahrsX1_def.hpp"
 
-static bool AHRS = false;
+#include <chrono>
+
+using namespace std::chrono_literals;
 
 namespace ntrex
 {
   void MwAhrsRosDriver::StartReading()
   {
-    AHRS = true;
-    sleep(1);
+    running_ = true;
+    std::this_thread::sleep_for(1s);
     reading_thread_ = std::thread(&MwAhrsRosDriver::MwAhrsRead, this);
   }
 
   void MwAhrsRosDriver::StopReading()
   {
-    if (AHRS)
+    if (running_)
     {
-      AHRS = false;
-      sleep(1);
+      running_ = false;
+      std::this_thread::sleep_for(1s);
       if (reading_thread_.joinable())
       {
         reading_thread_.join();
@@ -27,7 +29,7 @@ namespace ntrex
 
   void MwAhrsRosDriver::StartPubing()
   {
-    if (AHRS)
+    if (running_)
       publisher_thread_ = std::thread(&MwAhrsRosDriver::publish_topic, this);
   }
 
@@ -39,109 +41,116 @@ namespace ntrex
 
   void MwAhrsRosDriver::MW_AHRS_Covariance(void)
   {
-    imu_data_raw_msg = sensor_msgs::msg::Imu();
-    imu_data_msg = sensor_msgs::msg::Imu();
-    imu_magnetic_msg = sensor_msgs::msg::MagneticField();
-    imu_yaw_msg = std_msgs::msg::Float64();
+    imu_data_raw_msg_ = sensor_msgs::msg::Imu();
+    imu_data_msg_ = sensor_msgs::msg::Imu();
+    imu_magnetic_msg_ = sensor_msgs::msg::MagneticField();
+    imu_yaw_msg_ = std_msgs::msg::Float64();
 
     linear_acceleration_cov = linear_acceleration_stddev_ * linear_acceleration_stddev_;
     angular_velocity_cov = angular_velocity_stddev_ * angular_velocity_stddev_;
     magnetic_field_cov = magnetic_field_stddev_ * magnetic_field_stddev_;
     orientation_cov = orientation_stddev_ * orientation_stddev_;
 
-    imu_data_raw_msg.linear_acceleration_covariance[0] =
-        imu_data_raw_msg.linear_acceleration_covariance[4] =
-            imu_data_raw_msg.linear_acceleration_covariance[8] =
-                imu_data_msg.linear_acceleration_covariance[0] =
-                    imu_data_msg.linear_acceleration_covariance[4] =
-                        imu_data_msg.linear_acceleration_covariance[8] =
+    imu_data_raw_msg_.linear_acceleration_covariance[0] =
+        imu_data_raw_msg_.linear_acceleration_covariance[4] =
+            imu_data_raw_msg_.linear_acceleration_covariance[8] =
+                imu_data_msg_.linear_acceleration_covariance[0] =
+                    imu_data_msg_.linear_acceleration_covariance[4] =
+                        imu_data_msg_.linear_acceleration_covariance[8] =
                             linear_acceleration_cov;
 
-    imu_data_raw_msg.angular_velocity_covariance[0] =
-        imu_data_raw_msg.angular_velocity_covariance[4] =
-            imu_data_raw_msg.angular_velocity_covariance[8] =
-                imu_data_msg.angular_velocity_covariance[0] =
-                    imu_data_msg.angular_velocity_covariance[4] =
-                        imu_data_msg.angular_velocity_covariance[8] =
+    imu_data_raw_msg_.angular_velocity_covariance[0] =
+        imu_data_raw_msg_.angular_velocity_covariance[4] =
+            imu_data_raw_msg_.angular_velocity_covariance[8] =
+                imu_data_msg_.angular_velocity_covariance[0] =
+                    imu_data_msg_.angular_velocity_covariance[4] =
+                        imu_data_msg_.angular_velocity_covariance[8] =
                             angular_velocity_cov;
 
-    imu_data_msg.orientation_covariance[0] =
-        imu_data_msg.orientation_covariance[4] =
-            imu_data_msg.orientation_covariance[8] =
+    imu_data_msg_.orientation_covariance[0] =
+        imu_data_msg_.orientation_covariance[4] =
+            imu_data_msg_.orientation_covariance[8] =
                 orientation_cov;
 
-    imu_magnetic_msg.magnetic_field_covariance[0] =
-        imu_magnetic_msg.magnetic_field_covariance[4] =
-            imu_magnetic_msg.magnetic_field_covariance[8] =
+    imu_magnetic_msg_.magnetic_field_covariance[0] =
+        imu_magnetic_msg_.magnetic_field_covariance[4] =
+            imu_magnetic_msg_.magnetic_field_covariance[8] =
                 magnetic_field_cov;
   }
 
   void MwAhrsRosDriver::MwAhrsRead()
   {
-    while (AHRS)
+    float acc_value[3] = {0.0f};
+    float gyr_value[3] = {0.0f};
+    float deg_value[3] = {0.0f};
+    float mag_value[3] = {0.0f};
+
+    while (running_)
     {
       unsigned char data[8];
 
       if (MW_AHRS_Read(data))
       {
-        switch ((int)(unsigned char)data[1])
+        std::lock_guard<std::mutex> lock(data_mutex_);
+
+        switch (static_cast<int>(static_cast<unsigned char>(data[1])))
         {
         case ACC:
-          acc_value[0] = (int16_t)(((int)(unsigned char)data[2] | (int)(unsigned char)data[3] << 8)) / 1000.0;
-          acc_value[1] = (int16_t)(((int)(unsigned char)data[4] | (int)(unsigned char)data[5] << 8)) / 1000.0;
-          acc_value[2] = (int16_t)(((int)(unsigned char)data[6] | (int)(unsigned char)data[7] << 8)) / 1000.0;
+          acc_value[0] = static_cast<int16_t>(static_cast<int>(static_cast<unsigned char>(data[2])) | static_cast<int>(static_cast<unsigned char>(data[3])) << 8) / 1000.0f;
+          acc_value[1] = static_cast<int16_t>(static_cast<int>(static_cast<unsigned char>(data[4])) | static_cast<int>(static_cast<unsigned char>(data[5])) << 8) / 1000.0f;
+          acc_value[2] = static_cast<int16_t>(static_cast<int>(static_cast<unsigned char>(data[6])) | static_cast<int>(static_cast<unsigned char>(data[7])) << 8) / 1000.0f;
 
-          imu_data_raw_msg.linear_acceleration.x = imu_data_msg.linear_acceleration.x =
+          imu_data_raw_msg_.linear_acceleration.x = imu_data_msg_.linear_acceleration.x =
               acc_value[0] * convertor_g2a;
-          imu_data_raw_msg.linear_acceleration.y = imu_data_msg.linear_acceleration.y =
+          imu_data_raw_msg_.linear_acceleration.y = imu_data_msg_.linear_acceleration.y =
               acc_value[1] * convertor_g2a;
-          imu_data_raw_msg.linear_acceleration.z = imu_data_msg.linear_acceleration.z =
+          imu_data_raw_msg_.linear_acceleration.z = imu_data_msg_.linear_acceleration.z =
               acc_value[2] * convertor_g2a;
 
           break;
 
         case GYO:
-          gyr_value[0] = (int16_t)(((int)(unsigned char)data[2] | (int)(unsigned char)data[3] << 8)) / 10.0;
-          gyr_value[1] = (int16_t)(((int)(unsigned char)data[4] | (int)(unsigned char)data[5] << 8)) / 10.0;
-          gyr_value[2] = (int16_t)(((int)(unsigned char)data[6] | (int)(unsigned char)data[7] << 8)) / 10.0;
+          gyr_value[0] = static_cast<int16_t>(static_cast<int>(static_cast<unsigned char>(data[2])) | static_cast<int>(static_cast<unsigned char>(data[3])) << 8) / 10.0f;
+          gyr_value[1] = static_cast<int16_t>(static_cast<int>(static_cast<unsigned char>(data[4])) | static_cast<int>(static_cast<unsigned char>(data[5])) << 8) / 10.0f;
+          gyr_value[2] = static_cast<int16_t>(static_cast<int>(static_cast<unsigned char>(data[6])) | static_cast<int>(static_cast<unsigned char>(data[7])) << 8) / 10.0f;
 
-          imu_data_raw_msg.angular_velocity.x = imu_data_msg.angular_velocity.x =
+          imu_data_raw_msg_.angular_velocity.x = imu_data_msg_.angular_velocity.x =
               gyr_value[0] * convertor_d2r;
-          imu_data_raw_msg.angular_velocity.y = imu_data_msg.angular_velocity.y =
+          imu_data_raw_msg_.angular_velocity.y = imu_data_msg_.angular_velocity.y =
               gyr_value[1] * convertor_d2r;
-          imu_data_raw_msg.angular_velocity.z = imu_data_msg.angular_velocity.z =
+          imu_data_raw_msg_.angular_velocity.z = imu_data_msg_.angular_velocity.z =
               gyr_value[2] * convertor_d2r;
 
           break;
 
         case DEG:
-          deg_value[0] = (int16_t)(((int)(unsigned char)data[2] | (int)(unsigned char)data[3] << 8)) / 100.0;
-          deg_value[1] = (int16_t)(((int)(unsigned char)data[4] | (int)(unsigned char)data[5] << 8)) / 100.0;
-          deg_value[2] = (int16_t)(((int)(unsigned char)data[6] | (int)(unsigned char)data[7] << 8)) / 100.0;
+          deg_value[0] = static_cast<int16_t>(static_cast<int>(static_cast<unsigned char>(data[2])) | static_cast<int>(static_cast<unsigned char>(data[3])) << 8) / 100.0f;
+          deg_value[1] = static_cast<int16_t>(static_cast<int>(static_cast<unsigned char>(data[4])) | static_cast<int>(static_cast<unsigned char>(data[5])) << 8) / 100.0f;
+          deg_value[2] = static_cast<int16_t>(static_cast<int>(static_cast<unsigned char>(data[6])) | static_cast<int>(static_cast<unsigned char>(data[7])) << 8) / 100.0f;
 
           roll = deg_value[0] * convertor_d2r;
           pitch = deg_value[1] * convertor_d2r;
           yaw = deg_value[2] * convertor_d2r;
 
-          tf_orientation = Euler2Quaternion(roll, pitch, yaw);
+          tf_orientation_ = Euler2Quaternion(roll, pitch, yaw);
 
-          imu_yaw_msg.data = deg_value[2];
+          imu_yaw_msg_.data = deg_value[2];
 
-          imu_data_msg.orientation.x = tf_orientation.x();
-          imu_data_msg.orientation.y = tf_orientation.y();
-          imu_data_msg.orientation.z = tf_orientation.z();
-          imu_data_msg.orientation.w = tf_orientation.w();
+          imu_data_msg_.orientation.x = tf_orientation_.x();
+          imu_data_msg_.orientation.y = tf_orientation_.y();
+          imu_data_msg_.orientation.z = tf_orientation_.z();
+          imu_data_msg_.orientation.w = tf_orientation_.w();
 
           break;
 
         case MAG:
-          mag_value[0] = (int16_t)(((int)(unsigned char)data[2] | (int)(unsigned char)data[3] << 8)) / 10.0;
-          mag_value[1] = (int16_t)(((int)(unsigned char)data[4] | (int)(unsigned char)data[5] << 8)) / 10.0;
-          mag_value[2] = (int16_t)(((int)(unsigned char)data[6] | (int)(unsigned char)data[7] << 8)) / 10.0;
+          mag_value[0] = static_cast<int16_t>(static_cast<int>(static_cast<unsigned char>(data[2])) | static_cast<int>(static_cast<unsigned char>(data[3])) << 8) / 10.0f;
+          mag_value[1] = static_cast<int16_t>(static_cast<int>(static_cast<unsigned char>(data[4])) | static_cast<int>(static_cast<unsigned char>(data[5])) << 8) / 10.0f;
+          mag_value[2] = static_cast<int16_t>(static_cast<int>(static_cast<unsigned char>(data[6])) | static_cast<int>(static_cast<unsigned char>(data[7])) << 8) / 10.0f;
 
-          imu_magnetic_msg.magnetic_field.x = mag_value[0] / convertor_ut2t;
-          imu_magnetic_msg.magnetic_field.y = mag_value[1] / convertor_ut2t;
-          imu_magnetic_msg.magnetic_field.z = mag_value[2] / convertor_ut2t;
+          imu_magnetic_msg_.magnetic_field.x = mag_value[0] / convertor_ut2t;
+          imu_magnetic_msg_.magnetic_field.y = mag_value[1] / convertor_ut2t;
+          imu_magnetic_msg_.magnetic_field.z = mag_value[2] / convertor_ut2t;
 
           break;
         }
@@ -153,17 +162,36 @@ namespace ntrex
   {
     rclcpp::Rate rate(1000);
 
-    while (rclcpp::ok() && AHRS)
+    while (rclcpp::ok() && running_)
     {
+      sensor_msgs::msg::Imu imu_raw_copy;
+      sensor_msgs::msg::Imu imu_copy;
+      sensor_msgs::msg::MagneticField mag_copy;
+      std_msgs::msg::Float64 yaw_copy;
+      geometry_msgs::msg::Quaternion orientation_copy;
+
+      {
+        std::lock_guard<std::mutex> lock(data_mutex_);
+        imu_raw_copy = imu_data_raw_msg_;
+        imu_copy = imu_data_msg_;
+        mag_copy = imu_magnetic_msg_;
+        yaw_copy = imu_yaw_msg_;
+        orientation_copy = imu_data_msg_.orientation;
+      }
+
       rclcpp::Time now = this->get_clock()->now();
 
-      imu_data_raw_msg.header.stamp = imu_data_msg.header.stamp = imu_magnetic_msg.header.stamp = now;
-      imu_data_raw_msg.header.frame_id = imu_data_msg.header.frame_id = imu_magnetic_msg.header.frame_id = frame_id_;
+      imu_raw_copy.header.stamp = now;
+      imu_raw_copy.header.frame_id = frame_id_;
+      imu_copy.header.stamp = now;
+      imu_copy.header.frame_id = frame_id_;
+      mag_copy.header.stamp = now;
+      mag_copy.header.frame_id = frame_id_;
 
-      imu_data_raw_pub_->publish(std::move(imu_data_raw_msg));
-      imu_data_pub_->publish(std::move(imu_data_msg));
-      imu_mag_pub_->publish(std::move(imu_magnetic_msg));
-      imu_yaw_pub_->publish(std::move(imu_yaw_msg));
+      imu_data_raw_pub_->publish(imu_raw_copy);
+      imu_data_pub_->publish(imu_copy);
+      imu_mag_pub_->publish(mag_copy);
+      imu_yaw_pub_->publish(yaw_copy);
 
       if (publish_tf_)
       {
@@ -174,7 +202,7 @@ namespace ntrex
         tf.transform.translation.x = 0.0;
         tf.transform.translation.y = 0.0;
         tf.transform.translation.z = 0.0;
-        tf.transform.rotation = imu_data_msg.orientation;
+        tf.transform.rotation = orientation_copy;
 
         broadcaster_->sendTransform(tf);
       }
@@ -210,10 +238,10 @@ namespace ntrex
     res &= MW_AHRS_GetValI(hardware_ver, CI_HW_VERSION);
     res &= MW_AHRS_GetValI(function_ver, CI_FN_VERSION);
 
-    RCLCPP_INFO(this->get_logger(), "product_id   : %ld \n", product_id);
-    RCLCPP_INFO(this->get_logger(), "software_ver : %ld \n", software_ver);
-    RCLCPP_INFO(this->get_logger(), "hardware_ver : %ld \n", hardware_ver);
-    RCLCPP_INFO(this->get_logger(), "function_ver : %ld \n", function_ver);
+    RCLCPP_INFO(this->get_logger(), "product_id   : %ld", product_id);
+    RCLCPP_INFO(this->get_logger(), "software_ver : %ld", software_ver);
+    RCLCPP_INFO(this->get_logger(), "hardware_ver : %ld", hardware_ver);
+    RCLCPP_INFO(this->get_logger(), "function_ver : %ld", function_ver);
 
     res &= MW_AHRS_SetValI(sync_port,   CI_SYNC_PORT);
     res &= MW_AHRS_SetValI(sync_period, CI_SYNC_PERIOD);
@@ -226,43 +254,60 @@ namespace ntrex
     return res;
   }
 
-  MwAhrsRosDriver::MwAhrsRosDriver(char *port, int baud_rate) : Node("MW_AHRS_ROS2")
+  MwAhrsRosDriver::MwAhrsRosDriver(const std::string &port, int baud_rate)
+    : Node("MW_AHRS_ROS2")
   {
-    bool res = false;
+    // Declare all parameters with defaults
+    this->declare_parameter("port", port);
+    this->declare_parameter("baud_rate", baud_rate);
+    this->declare_parameter("publish_tf", false);
+    this->declare_parameter("frame_id", std::string("imu_link"));
+    this->declare_parameter("parent_frame_id", std::string("base_link"));
+    this->declare_parameter("linear_acceleration_stddev", 0.02);
+    this->declare_parameter("angular_velocity_stddev", 0.01);
+    this->declare_parameter("magnetic_field_stddev", 0.00000327486);
+    this->declare_parameter("orientation_stddev", 0.00125);
 
-    res = MW_AHRS_Connect(port, baud_rate);
+    // Read parameters
+    std::string actual_port = this->get_parameter("port").as_string();
+    int actual_baud = this->get_parameter("baud_rate").as_int();
+    publish_tf_ = this->get_parameter("publish_tf").as_bool();
+    frame_id_ = this->get_parameter("frame_id").as_string();
+    parent_frame_id_ = this->get_parameter("parent_frame_id").as_string();
 
-    if(res) res = MW_AHRS_Setting();
+    this->get_parameter("linear_acceleration_stddev", linear_acceleration_stddev_);
+    this->get_parameter("angular_velocity_stddev", angular_velocity_stddev_);
+    this->get_parameter("magnetic_field_stddev", magnetic_field_stddev_);
+    this->get_parameter("orientation_stddev", orientation_stddev_);
+
+    bool res = MW_AHRS_Connect(const_cast<char *>(actual_port.c_str()),
+                               static_cast<uint32_t>(actual_baud));
+
+    if (res) res = MW_AHRS_Setting();
 
     if (res)
     {
-      this->declare_parameter("linear_acceleration_stddev");
-      this->declare_parameter("angular_velocity_stddev");
-      this->declare_parameter("magnetic_field_stddev");
-      this->declare_parameter("orientation_stddev");
-
-      this->get_parameter("linear_acceleration_stddev", linear_acceleration_stddev_);
-      this->get_parameter("angular_velocity_stddev", angular_velocity_stddev_);
-      this->get_parameter("magnetic_field_stddev", magnetic_field_stddev_);
-      this->get_parameter("orientation_stddev", orientation_stddev_);
-
       MW_AHRS_Covariance();
 
-      StartReading();
+      if (publish_tf_)
+      {
+        broadcaster_ = std::make_unique<tf2_ros::TransformBroadcaster>(*this);
+      }
 
-      auto qos = rclcpp::QoS(rclcpp::KeepLast(10)) .reliable() .durability_volatile();
+      auto qos = rclcpp::QoS(rclcpp::KeepLast(10)).reliable().durability_volatile();
 
       imu_data_raw_pub_ = this->create_publisher<sensor_msgs::msg::Imu>("imu/data_raw", qos);
       imu_data_pub_ = this->create_publisher<sensor_msgs::msg::Imu>("imu/data", qos);
       imu_mag_pub_ = this->create_publisher<sensor_msgs::msg::MagneticField>("imu/mag", qos);
       imu_yaw_pub_ = this->create_publisher<std_msgs::msg::Float64>("imu/yaw", qos);
 
+      StartReading();
       StartPubing();
       RCLCPP_INFO(this->get_logger(), "MW-AHRS ROS Init Success");
     }
     else
     {
-      RCLCPP_INFO(this->get_logger(), "MW-AHRS ROS Init Fail");
+      RCLCPP_ERROR(this->get_logger(), "MW-AHRS ROS Init Fail");
     }
   }
 

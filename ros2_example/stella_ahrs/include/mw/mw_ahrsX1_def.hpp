@@ -1,3 +1,5 @@
+#pragma once
+
 enum ePortIndex {
     CI_CAN             = 8,
     CI_FDCAN          = 4,

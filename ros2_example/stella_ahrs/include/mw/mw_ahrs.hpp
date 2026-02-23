@@ -44,7 +44,6 @@ namespace ntrex
         void MwAhrsRead();
         tf2::Quaternion Euler2Quaternion(float roll, float pitch, float yaw);
         void publish_topic();
-        bool MW_AHRS_Setting();
 
         // ROS parameters
         double linear_acceleration_stddev_{0.0};

@@ -1,5 +1,4 @@
 #include "mw_ahrs.hpp"
-#include "mw_ahrsX1_def.hpp"
 
 #include <chrono>
 
@@ -89,7 +88,7 @@ namespace ntrex
     {
       unsigned char data[8];
 
-      if (MW_AHRS_Read(data))
+      if (AHRS_Read(data))
       {
         std::lock_guard<std::mutex> lock(data_mutex_);
 
@@ -225,35 +224,6 @@ namespace ntrex
     return q;
   }
 
-  bool MwAhrsRosDriver::MW_AHRS_Setting()
-  {
-    bool res = true;
-
-    long product_id = 0, software_ver = 0, hardware_ver = 0, function_ver = 0;
-
-    long sync_port = CI_USB, sync_period = 10, sync_trmode = CI_Binary, sync_data = 15, FlashWrite = 1;
-
-    res &= MW_AHRS_GetValI(product_id,   CI_PRODUCT_ID);
-    res &= MW_AHRS_GetValI(software_ver, CI_SW_VERSION);
-    res &= MW_AHRS_GetValI(hardware_ver, CI_HW_VERSION);
-    res &= MW_AHRS_GetValI(function_ver, CI_FN_VERSION);
-
-    RCLCPP_INFO(this->get_logger(), "product_id   : %ld", product_id);
-    RCLCPP_INFO(this->get_logger(), "software_ver : %ld", software_ver);
-    RCLCPP_INFO(this->get_logger(), "hardware_ver : %ld", hardware_ver);
-    RCLCPP_INFO(this->get_logger(), "function_ver : %ld", function_ver);
-
-    res &= MW_AHRS_SetValI(sync_port,   CI_SYNC_PORT);
-    res &= MW_AHRS_SetValI(sync_period, CI_SYNC_PERIOD);
-    res &= MW_AHRS_SetValI(sync_trmode, CI_SYNC_TRMODE);
-    res &= MW_AHRS_SetValI(sync_data,   CI_SYNC_DATA);
-    res &= MW_AHRS_SetValI(FlashWrite,  CI_SYS_COMMAND);
-
-    res &= MW_AHRS_NvicReset ();
-
-    return res;
-  }
-
   MwAhrsRosDriver::MwAhrsRosDriver(const std::string &port, int baud_rate)
     : Node("MW_AHRS_ROS2")
   {
@@ -280,10 +250,8 @@ namespace ntrex
     this->get_parameter("magnetic_field_stddev", magnetic_field_stddev_);
     this->get_parameter("orientation_stddev", orientation_stddev_);
 
-    bool res = MW_AHRS_Connect(const_cast<char *>(actual_port.c_str()),
-                               static_cast<uint32_t>(actual_baud));
-
-    if (res) res = MW_AHRS_Setting();
+    int res = MW_AHRS_Serial_Connect(const_cast<char *>(actual_port.c_str()),
+                                     static_cast<uint32_t>(actual_baud), 0);
 
     if (res)
     {
@@ -315,6 +283,6 @@ namespace ntrex
   {
     StopReading();
     StopPubing();
-    MW_AHRS_DisConnect();
+    MW_Serial_DisConnect();
   }
 }

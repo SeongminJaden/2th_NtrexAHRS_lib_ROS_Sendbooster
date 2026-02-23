@@ -50,7 +50,7 @@ ament_target_dependencies(${PROJECT_NAME}_node
   tf2_msgs
 )
 
-target_link_libraries(${PROJECT_NAME}_node ${CMAKE_CURRENT_SOURCE_DIR}/lib/MW_AHRS_amd64.a)
+target_link_libraries(${PROJECT_NAME}_node ${CMAKE_CURRENT_SOURCE_DIR}/../../lib_aarch64/MW_AHRS_aarch64.a)
 
 ################################################################################
 # Install

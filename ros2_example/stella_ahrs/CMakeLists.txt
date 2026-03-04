@@ -23,6 +23,7 @@ find_package(geometry_msgs REQUIRED)
 find_package(tf2 REQUIRED)
 find_package(tf2_ros REQUIRED)
 find_package(tf2_msgs REQUIRED)
+find_package(std_srvs REQUIRED)
 
 ################################################################################
 # Build
@@ -48,6 +49,7 @@ ament_target_dependencies(${PROJECT_NAME}_node
   tf2
   tf2_ros
   tf2_msgs
+  std_srvs
 )
 
 target_link_libraries(${PROJECT_NAME}_node ${CMAKE_CURRENT_SOURCE_DIR}/../../lib_aarch64/MW_AHRS_aarch64.a)

@@ -10,6 +10,7 @@
 #include <sensor_msgs/msg/imu.hpp>
 #include <sensor_msgs/msg/magnetic_field.hpp>
 #include <std_msgs/msg/float64.hpp>
+#include <std_srvs/srv/trigger.hpp>
 #include <geometry_msgs/msg/transform_stamped.hpp>
 #include <tf2/LinearMath/Quaternion.h>
 #include <tf2_ros/transform_broadcaster.h>
@@ -83,5 +84,9 @@ namespace ntrex
         rclcpp::Publisher<sensor_msgs::msg::MagneticField>::SharedPtr imu_mag_pub_;
         rclcpp::Publisher<std_msgs::msg::Float64>::SharedPtr imu_yaw_pub_;
         std::unique_ptr<tf2_ros::TransformBroadcaster> broadcaster_;
+
+        // Services
+        rclcpp::Service<std_srvs::srv::Trigger>::SharedPtr calibration_srv_;
+        rclcpp::Service<std_srvs::srv::Trigger>::SharedPtr euler_reset_srv_;
     };
 }

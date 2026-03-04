@@ -269,6 +269,27 @@ namespace ntrex
       imu_mag_pub_ = this->create_publisher<sensor_msgs::msg::MagneticField>("imu/mag", qos);
       imu_yaw_pub_ = this->create_publisher<std_msgs::msg::Float64>("imu/yaw", qos);
 
+      calibration_srv_ = this->create_service<std_srvs::srv::Trigger>(
+          "imu/calibration",
+          [this](const std_srvs::srv::Trigger::Request::SharedPtr,
+                 std_srvs::srv::Trigger::Response::SharedPtr res) {
+            RCLCPP_INFO(this->get_logger(), "Magnetometer calibration started...");
+            int ret = AHRS_Calibration();
+            res->success = (ret != 0);
+            res->message = res->success ? "Calibration OK" : "Calibration failed";
+            RCLCPP_INFO(this->get_logger(), "AHRS_Calibration result: %d", ret);
+          });
+
+      euler_reset_srv_ = this->create_service<std_srvs::srv::Trigger>(
+          "imu/euler_reset",
+          [this](const std_srvs::srv::Trigger::Request::SharedPtr,
+                 std_srvs::srv::Trigger::Response::SharedPtr res) {
+            int ret = AHRS_Euler_RESET();
+            res->success = (ret != 0);
+            res->message = res->success ? "Euler reset OK" : "Euler reset failed";
+            RCLCPP_INFO(this->get_logger(), "AHRS_Euler_RESET result: %d", ret);
+          });
+
       StartReading();
       StartPubing();
       RCLCPP_INFO(this->get_logger(), "MW-AHRS ROS Init Success");

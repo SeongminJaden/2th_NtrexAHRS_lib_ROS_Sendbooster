@@ -84,6 +84,8 @@ namespace ntrex
     float deg_value[3] = {0.0f};
     float mag_value[3] = {0.0f};
 
+    rclcpp::Rate read_rate(200);  // 200Hz read rate to reduce CPU usage
+
     while (running_)
     {
       unsigned char data[8];
@@ -154,6 +156,7 @@ namespace ntrex
           break;
         }
       }
+      read_rate.sleep();
     }
   }
 

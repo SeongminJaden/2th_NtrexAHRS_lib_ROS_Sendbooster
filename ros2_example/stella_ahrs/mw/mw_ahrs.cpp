@@ -159,7 +159,7 @@ namespace ntrex
 
   void MwAhrsRosDriver::publish_topic()
   {
-    rclcpp::Rate rate(1000);
+    rclcpp::Rate rate(50);
 
     while (rclcpp::ok() && running_)
     {
